@@ -15,7 +15,6 @@ project-root/
 ├── classify.py           # Model training and evaluation script
 ├── README.md             # Project overview and usage instructions
 └── Models/                # Saved models for future predictions
-└── Data/Workshop_data/   # Filtered & augmented data for classification
 ```
 
 ## Requirements
