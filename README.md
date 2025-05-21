@@ -14,7 +14,7 @@ project-root/
 ├── preproc.py            # EEG preprocessing and ERP plotting
 ├── classify.py           # Model training and evaluation script
 ├── README.md             # Project overview and usage instructions
-└── Models                # Saved models for future predictions
+└── Models/                # Saved models for future predictions
 └── Data/Workshop_data/   # Filtered & augmented data for classification
 ```
 
