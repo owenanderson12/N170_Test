@@ -103,5 +103,4 @@ pip install mne autoreject numpy scikit-learn imbalanced-learn matplotlib tensor
 
 ## License & Author
 
-**Author**: Owen Anderson<br>
-**License**: MIT License (feel free to adapt for academic and research purposes)
+**Author**: Owen Anderson - owenanderson2022@gmail.com
