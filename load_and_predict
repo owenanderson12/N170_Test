@@ -1,0 +1,175 @@
+# Load the model
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+loaded_model = load_model('/Users/owenanderson/Documents/NeurEx/Projects/Headset_Tests/P1_N170/Models/V1.keras')
+loaded_model.summary()
+
+# Process data and make predictions
+
+# Import necessary libraries
+import os
+import numpy as np
+import mne
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# TensorFlow and Keras
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import (Input, Conv2D, BatchNormalization,
+                                     Activation, MaxPooling2D, Dropout, Flatten, Dense)
+from tensorflow.keras.optimizers import Adam
+
+# Scikit-learn
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix, classification_report
+
+# Suppress TensorFlow warnings (optional)
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+
+# Define constants
+DATA_DIR = '/Users/owenanderson/Documents/NeurEx/Projects/P1_N170/Data/Data/'  # Update if necessary
+MODEL_PATH = '/Users/owenanderson/Documents/NeurEx/Projects/P1_N170/Models/V1.keras'  # Path to the saved model
+CHANNELS_OF_INTEREST = ['P8', 'PO8', 'O2', 'P10']
+STIMULUS_LABELS = [1, 2]  # 1: Face, 2: Car
+LABEL_OFFSET = 1  # To adjust labels to start from 0
+TIME_WINDOW = (0.1, 0.2)  # 100 ms to 200 ms
+
+# Function to load and preprocess data
+def load_and_preprocess_data(data_dir, channels_of_interest, stimulus_labels, time_window):
+    # List all subject folders
+    subject_folders = [f for f in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, f))]
+
+    # Initialize lists to hold data and labels from all subjects
+    X_list = []
+    y_list = []
+
+    # Loop over each subject folder
+    for subject in subject_folders:
+        subject_data_dir = os.path.join(data_dir, subject)
+        # Construct file paths for the subject's data
+        X_file = os.path.join(subject_data_dir, f'Epochs_{subject}.fif')
+        y_file = os.path.join(subject_data_dir, f'y_labels_{subject}.npy')
+
+        # Check if data files exist
+        if os.path.exists(X_file) and os.path.exists(y_file):
+            print(f'Loading data for {subject}')
+            # Load the data
+            X_subject = mne.read_epochs(X_file, preload=True, verbose=False)
+            y_subject = np.load(y_file)
+            # Append to the list
+            X_sub_data = X_subject.get_data()
+            X_list.append(X_sub_data)
+            y_list.append(y_subject)
+        else:
+            print(f'Data files not found for {subject}')
+
+    # Ensure that at least one subject has been loaded
+    if len(X_list) == 0:
+        raise ValueError("No data was loaded. Please check your data directory and files.")
+
+    # Get channel names from the last loaded subject
+    channels = X_subject.ch_names
+    try:
+        chan_idx = [channels.index(chan) for chan in channels_of_interest]
+    except ValueError as e:
+        raise ValueError(f"One or more channels of interest not found: {e}")
+
+    # Concatenate data from all subjects
+    X = np.concatenate(X_list, axis=0)
+    X = X[:, chan_idx, :]  # Select channels of interest
+    y = np.concatenate(y_list, axis=0)
+
+    print(f'Combined data shape before filtering: X={X.shape}, y={y.shape}')
+
+    # Filter stimulus events
+    stimulus_mask = np.isin(y, stimulus_labels)
+    X = X[stimulus_mask]
+    y = y[stimulus_mask]
+
+    # Adjust labels to start from 0
+    y = y - LABEL_OFFSET
+
+    # Focus on the N170 response by selecting data around 170 ms
+    times = X_subject.times  # Time vector from the epochs
+    time_mask = (times >= time_window[0]) & (times <= time_window[1])
+    X = X[:, :, time_mask]
+
+    print(f'Combined data shape after filtering: X={X.shape}, y={y.shape}')
+
+    # Normalize data per channel
+    def normalize_per_channel(X_data):
+        X_norm = np.zeros_like(X_data)
+        for i in range(X_data.shape[1]):  # Loop over channels
+            scaler = StandardScaler()
+            X_channel = X_data[:, i, :]
+            X_norm[:, i, :] = scaler.fit_transform(X_channel)
+        return X_norm
+
+    X = normalize_per_channel(X)
+
+    # Reshape data for Conv2D (samples, channels, times, 1)
+    X = X.transpose((0, 1, 2))  # Shape: (samples, channels, times)
+    X = X[..., np.newaxis]  # Shape: (samples, channels, times, 1)
+
+    print(f'Preprocessed data shape: X={X.shape}, y={y.shape}')
+
+    return X, y
+
+# Function to make predictions
+def make_predictions(model, X):
+    # Predict class probabilities
+    y_pred_prob = model.predict(X)
+    # Predict class labels
+    y_pred = np.argmax(y_pred_prob, axis=1)
+    return y_pred_prob, y_pred
+
+# Function to visualize confusion matrix and classification report
+def evaluate_predictions(y_true, y_pred, class_names=['Face', 'Car']):
+    # Confusion Matrix
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names,
+                yticklabels=class_names)
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.title('Confusion Matrix')
+    plt.show()
+
+    # Classification Report
+    print("Classification Report:")
+    print(classification_report(y_true, y_pred, target_names=class_names))
+
+# Main execution
+if __name__ == '__main__':
+    # Check if the model file exists
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Saved model not found at path: {MODEL_PATH}")
+
+    # Load the saved model
+    print("Loading the trained DeepConvNet model...")
+    model = load_model(MODEL_PATH)
+    print("Model loaded successfully.")
+
+    # Load and preprocess the data
+    print("Loading and preprocessing data...")
+    X, y_true = load_and_preprocess_data(DATA_DIR, CHANNELS_OF_INTEREST, STIMULUS_LABELS, TIME_WINDOW)
+    print("Data loaded and preprocessed.")
+
+    # Make predictions
+    print("Making predictions...")
+    y_pred_prob, y_pred = make_predictions(model, X)
+    print("Predictions completed.")
+
+    # Evaluate and visualize predictions
+    print("Evaluating predictions...")
+    evaluate_predictions(y_true, y_pred, class_names=['Face', 'Car'])
+
+    # (Optional) Save predictions to a file
+    predictions_output = np.vstack((y_true, y_pred, y_pred_prob.T)).T
+    output_file = 'predictions.csv'
+    np.savetxt(output_file, predictions_output, delimiter=',',
+               header='True_Label,Predicted_Label,Face_Prob,Car_Prob', comments='')
+    print(f"Predictions saved to {output_file}.")
