@@ -14,10 +14,7 @@ project-root/
 ├── preproc.py            # EEG preprocessing and ERP plotting
 ├── classify.py           # Model training and evaluation script
 ├── README.md             # Project overview and usage instructions
-└── Data/
-    ├── N170 Raw Data BIDS-Compatible/   # Raw EEGLAB .set files in BIDS layout
-    ├── Plots/                          # Subject-wise ERP figures
-    └── Data/                           # Saved .npy arrays: X_eeg.npy, y_labels.npy
+└── Models                # Saved models for future predictions
 └── Data/Workshop_data/   # Filtered & augmented data for classification
 ```
 
